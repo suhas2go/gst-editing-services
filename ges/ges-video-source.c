@@ -59,6 +59,11 @@
  *  <entry>The desired height for that source. Set to 0 if size is not mandatory, will be set to height of the current track.</entry>
  * </row>
  * <row>
+ *  <entry role="property_type"><link linkend="gdouble"><type>gdouble</type></link></entry>
+ *  <entry role="property_name"><link linkend="GESVideoSource--rate">rate</link></entry>
+ *  <entry>Factor of speed for frame displaying. Set to 1.0 by default.</entry>
+ * </row>
+ * <row>
  *  <entry role="property_type"><link linkend="GstDeinterlaceModes"><type>GstDeinterlaceModes</type></link></entry>
  *  <entry role="property_name"><link linkend="GESVideoSource--deinterlace-mode">deinterlace-mode</link></entry>
  *  <entry>Deinterlace Mode</entry>
@@ -94,6 +99,7 @@ struct _GESVideoSourcePrivate
 {
   GstFramePositioner *positioner;
   GstElement *capsfilter;
+  GstElement *videorate;
 };
 
 /* TrackElement VMethods */
@@ -135,6 +141,7 @@ ges_video_source_create_element (GESTrackElement * trksrc)
   const gchar *positioner_props[] =
       { "alpha", "posx", "posy", "width", "height", NULL };
   const gchar *deinterlace_props[] = { "mode", "fields", "tff", NULL };
+  const gchar *videorate_props[] = { "rate", NULL };
 
   if (!source_class->create_source)
     return NULL;
@@ -164,6 +171,10 @@ ges_video_source_create_element (GESTrackElement * trksrc)
   ges_track_element_add_children_props (trksrc, positioner, NULL, NULL,
       positioner_props);
 
+  g_object_set (videorate, "rate", (gdouble) DEFAULT_CLIP_RATE, NULL);
+  ges_track_element_add_children_props (trksrc, videorate, NULL, NULL,
+      videorate_props);
+
   if (deinterlace == NULL) {
     post_missing_element_message (sub_element, "deinterlace");
 
@@ -186,6 +197,7 @@ ges_video_source_create_element (GESTrackElement * trksrc)
   self->priv->positioner->scale_in_compositor =
       !GES_VIDEO_SOURCE_GET_CLASS (self)->ABI.abi.disable_scale_in_compositor;
   self->priv->capsfilter = capsfilter;
+  self->priv->videorate = videorate;
 
   return topbin;
 }
@@ -221,11 +233,24 @@ _lookup_child (GESTimelineElement * object,
   return res;
 }
 
+static gboolean
+ges_video_source_set_rate (GESSource * source, gdouble rate)
+{
+  GESVideoSource *self = GES_VIDEO_SOURCE (source);
+  GstElement *nleobject;
+
+  g_object_set (self->priv->videorate, "rate", rate, NULL);
+  nleobject = ges_track_element_get_nleobject (GES_TRACK_ELEMENT (self));
+  g_object_set (nleobject, "media-duration-factor", rate, NULL);
+  return TRUE;
+}
+
 static void
 ges_video_source_class_init (GESVideoSourceClass * klass)
 {
   GESTrackElementClass *track_element_class = GES_TRACK_ELEMENT_CLASS (klass);
   GESTimelineElementClass *element_class = GES_TIMELINE_ELEMENT_CLASS (klass);
+  GESSourceClass *source_class = GES_SOURCE_CLASS (klass);
   GESVideoSourceClass *video_source_class = GES_VIDEO_SOURCE_CLASS (klass);
 
   g_type_class_add_private (klass, sizeof (GESVideoSourcePrivate));
@@ -235,6 +260,7 @@ ges_video_source_class_init (GESVideoSourceClass * klass)
 
   track_element_class->nleobject_factorytype = "nlesource";
   track_element_class->create_element = ges_video_source_create_element;
+  source_class->set_rate = ges_video_source_set_rate;
   video_source_class->create_source = NULL;
 }
 
@@ -245,4 +271,5 @@ ges_video_source_init (GESVideoSource * self)
       GES_TYPE_VIDEO_SOURCE, GESVideoSourcePrivate);
   self->priv->positioner = NULL;
   self->priv->capsfilter = NULL;
+  self->priv->videorate = NULL;
 }

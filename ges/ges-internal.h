@@ -44,6 +44,7 @@ GST_DEBUG_CATEGORY_EXTERN (_ges_debug);
  */
 #define MIN_NLE_PRIO 2
 #define LAYER_HEIGHT 1000
+#define DEFAULT_CLIP_RATE 1.0
 
 #define _START(obj) GES_TIMELINE_ELEMENT_START (obj)
 #define _INPOINT(obj) GES_TIMELINE_ELEMENT_INPOINT (obj)
@@ -349,6 +350,12 @@ G_GNUC_INTERNAL guint32           ges_clip_get_layer_priority     (GESClip *clip
 G_GNUC_INTERNAL void              ges_clip_set_moving_from_layer  (GESClip *clip, gboolean is_moving);
 G_GNUC_INTERNAL GESTrackElement*  ges_clip_create_track_element   (GESClip *clip, GESTrackType type);
 G_GNUC_INTERNAL GList*            ges_clip_create_track_elements  (GESClip *clip, GESTrackType type);
+
+/****************************************************
+ *                  GESSourceClip                   *
+ ****************************************************/
+G_GNUC_INTERNAL GstClockTime      ges_source_clip_get_input_duration  (GESSourceClip * source_clip);
+G_GNUC_INTERNAL void              ges_source_clip_set_input_duration  (GESSourceClip * source_clip, GstClockTime duration);
 
 /****************************************************
  *              GESLayer                            *

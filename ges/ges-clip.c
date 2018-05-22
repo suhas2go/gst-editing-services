@@ -1391,6 +1391,8 @@ ges_clip_split (GESClip * clip, guint64 position)
     _set_inpoint0 (GES_TIMELINE_ELEMENT (new_trackelement),
         inpoint + old_duration * media_duration_factor);
     _set_duration0 (GES_TIMELINE_ELEMENT (new_trackelement), new_duration);
+    ges_timeline_element_set_max_duration (GES_TIMELINE_ELEMENT
+        (new_trackelement), GES_TIMELINE_ELEMENT_MAX_DURATION (new_object));
 
     ges_container_add (GES_CONTAINER (new_object),
         GES_TIMELINE_ELEMENT (new_trackelement));

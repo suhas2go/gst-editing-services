@@ -77,6 +77,10 @@ struct _GESSourceClipClass {
 
 GES_API
 GType ges_source_clip_get_type (void);
+GES_API
+gdouble           ges_source_clip_get_rate  (GESSourceClip * source_clip);
+GES_API
+void              ges_source_clip_set_rate  (GESSourceClip * source_clip, gdouble rate);
 
 G_END_DECLS
 

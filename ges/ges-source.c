@@ -29,15 +29,27 @@
 #include "ges-track-element.h"
 #include "ges-source.h"
 #include "ges-layer.h"
-#include "gstframepositioner.h"
 
 G_DEFINE_TYPE (GESSource, ges_source, GES_TYPE_TRACK_ELEMENT);
 
 struct _GESSourcePrivate
 {
-  /*  Dummy variable */
-  GstFramePositioner *positioner;
+  gdouble rate;
 };
+
+static void
+ges_source_set_child_property (GESTimelineElement * self G_GNUC_UNUSED,
+    GObject * child, GParamSpec * pspec, GValue * value)
+{
+  g_object_set_property (child, pspec->name, value);
+
+  if (!g_strcmp0 ("rate", pspec->name)) {
+    GstElement *nleobject;
+    nleobject = ges_track_element_get_nleobject (GES_TRACK_ELEMENT (self));
+    g_object_set_property (G_OBJECT (nleobject), "media-duration-factor",
+        value);
+  }
+}
 
 /******************************
  *   Internal helper methods  *
@@ -140,15 +152,41 @@ ges_source_create_topbin (const gchar * bin_name, GstElement * sub_element, ...)
   return bin;
 }
 
+gboolean
+ges_source_set_rate (GESSource * self, gdouble rate)
+{
+  gboolean res;
+
+  if (!GES_SOURCE_GET_CLASS (self)->set_rate) {
+    GST_ERROR_OBJECT (self, "No set rate vmethod implemented");
+    return FALSE;
+  }
+
+  res = GES_SOURCE_GET_CLASS (self)->set_rate (self, rate);
+  if (res)
+    self->priv->rate = rate;
+  return res;
+}
+
+gdouble
+ges_source_get_rate (GESSource * self)
+{
+  return self->priv->rate;
+}
+
 static void
 ges_source_class_init (GESSourceClass * klass)
 {
+  GESTimelineElementClass *timeline_class = GES_TIMELINE_ELEMENT_CLASS (klass);
   GESTrackElementClass *track_class = GES_TRACK_ELEMENT_CLASS (klass);
 
   g_type_class_add_private (klass, sizeof (GESSourcePrivate));
 
+  timeline_class->set_child_property = ges_source_set_child_property;
   track_class->nleobject_factorytype = "nlesource";
   track_class->create_element = NULL;
+
+  klass->set_rate = ges_source_set_rate;
 }
 
 static void
@@ -156,4 +194,5 @@ ges_source_init (GESSource * self)
 {
   self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
       GES_TYPE_SOURCE, GESSourcePrivate);
+  self->priv->rate = DEFAULT_CLIP_RATE;
 }

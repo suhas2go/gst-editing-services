@@ -90,7 +90,6 @@ struct _GESVideoSourceClass {
 
 GES_API
 GType ges_video_source_get_type (void);
-
 G_END_DECLS
 
 #endif /* _GES_VIDEO_SOURCE */

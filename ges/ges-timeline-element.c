@@ -108,6 +108,10 @@ typedef struct
 } EmitDeepNotifyInIdleData;
 
 static void
+default_get_media_duration_factor (GESTimelineElement * self,
+    gdouble * media_duration_factor);
+
+static void
 _set_child_property (GESTimelineElement * self G_GNUC_UNUSED, GObject * child,
     GParamSpec * pspec, GValue * value)
 {
@@ -442,6 +446,8 @@ ges_timeline_element_class_init (GESTimelineElementClass * klass)
   klass->list_children_properties = default_list_children_properties;
   klass->lookup_child = _lookup_child;
   klass->set_child_property = _set_child_property;
+
+  klass->get_media_duration_factor = default_get_media_duration_factor;
 }
 
 static void
@@ -1178,8 +1184,11 @@ ges_timeline_element_copy (GESTimelineElement * self, gboolean deep)
 
 
   asset = ges_extractable_get_asset (GES_EXTRACTABLE (self));
-  if (asset)
+  if (asset) {
     ges_extractable_set_asset (GES_EXTRACTABLE (ret), asset);
+    ges_timeline_element_set_max_duration (GES_TIMELINE_ELEMENT (ret),
+        self->maxduration);
+  }
   if (deep) {
     if (klass->deep_copy)
       klass->deep_copy (self, ret);
@@ -1828,15 +1837,14 @@ ges_timeline_element_paste (GESTimelineElement * self,
   return g_object_ref (res);
 }
 
-/* Internal */
-gdouble
-ges_timeline_element_get_media_duration_factor (GESTimelineElement * self)
+static void
+default_get_media_duration_factor (GESTimelineElement * self,
+    gdouble * media_duration_factor)
 {
-  gdouble media_duration_factor;
   GESEffectClass *class;
   GList *props;
 
-  media_duration_factor = 1.0;
+  *media_duration_factor = 1.0;
 
   class = GES_EFFECT_CLASS (g_type_class_ref (GES_TYPE_EFFECT));
 
@@ -1847,11 +1855,11 @@ ges_timeline_element_get_media_duration_factor (GESTimelineElement * self)
       if (G_PARAM_SPEC_VALUE_TYPE (pspec) == G_TYPE_FLOAT) {
         gfloat rate_change;
         g_object_get (child, pspec->name, &rate_change, NULL);
-        media_duration_factor *= rate_change;
+        *media_duration_factor *= rate_change;
       } else if (G_PARAM_SPEC_VALUE_TYPE (pspec) == G_TYPE_DOUBLE) {
         gdouble rate_change;
         g_object_get (child, pspec->name, &rate_change, NULL);
-        media_duration_factor *= rate_change;
+        *media_duration_factor *= rate_change;
       } else {
         GST_WARNING_OBJECT (self,
             "Rate property %s in child %" GST_PTR_FORMAT
@@ -1864,11 +1872,23 @@ ges_timeline_element_get_media_duration_factor (GESTimelineElement * self)
 
       GST_DEBUG_OBJECT (self,
           "Added rate changing property %s, set to value %lf",
-          (const char *) props->data, media_duration_factor);
+          (const char *) props->data, *media_duration_factor);
     }
   }
-
   g_type_class_unref (class);
+}
+
+gdouble
+ges_timeline_element_get_media_duration_factor (GESTimelineElement * self)
+{
+  gdouble media_duration_factor;
+  if (!GES_TIMELINE_ELEMENT_GET_CLASS (self)->get_media_duration_factor) {
+    GST_DEBUG_OBJECT (self, "No get_media_duration_factor Vmethod implemented");
+    default_get_media_duration_factor (self, &media_duration_factor);
+  } else {
+    GES_TIMELINE_ELEMENT_GET_CLASS (self)->get_media_duration_factor (self,
+        &media_duration_factor);
+  }
   return media_duration_factor;
 }
 

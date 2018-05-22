@@ -72,6 +72,8 @@ struct _GESSourceClass {
   /*< private >*/
   GESTrackElementClass parent_class;
 
+  gboolean (*set_rate)        (GESSource * self, gdouble rate);
+
   /*< private >*/
   /* Padding for API extension */
   gpointer _ges_reserved[GES_PADDING];
@@ -79,6 +81,11 @@ struct _GESSourceClass {
 
 GES_API
 GType ges_source_get_type (void);
+
+GES_API
+gboolean ges_source_set_rate (GESSource *self, gdouble rate);
+GES_API
+gdouble ges_source_get_rate (GESSource *self);
 
 G_END_DECLS
 

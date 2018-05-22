@@ -197,6 +197,8 @@ struct _GESTimelineElementClass
   GESTrackType (*get_track_types)          (GESTimelineElement * self);
   void         (*set_child_property)       (GESTimelineElement * self, GObject *child,
                                             GParamSpec *pspec, GValue *value);
+                                            
+  void (*get_media_duration_factor)       (GESTimelineElement * self, gdouble * media_duration_factor);
 
   /*< private > */
   /* Padding for API extension */
