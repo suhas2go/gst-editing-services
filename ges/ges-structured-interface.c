@@ -339,9 +339,11 @@ _ges_add_clip_from_struct (GESTimeline * timeline, GstStructure * structure,
   GstClockTime duration = 1 * GST_SECOND, inpoint = 0, start =
       GST_CLOCK_TIME_NONE;
 
+  gdouble rate = 1.0;
+
   const gchar *valid_fields[] =
       { "asset-id", "pattern", "name", "layer-priority", "layer", "type",
-    "start", "inpoint", "duration", "text", NULL
+    "start", "inpoint", "duration", "text", "rate", NULL
   };
 
   FieldsError fields_error = { valid_fields, NULL };
@@ -361,6 +363,7 @@ _ges_add_clip_from_struct (GESTimeline * timeline, GstStructure * structure,
   TRY_GET ("start", GST_TYPE_CLOCK_TIME, &start, GST_CLOCK_TIME_NONE);
   TRY_GET ("inpoint", GST_TYPE_CLOCK_TIME, &inpoint, 0);
   TRY_GET ("duration", GST_TYPE_CLOCK_TIME, &duration, GST_CLOCK_TIME_NONE);
+  TRY_GET ("rate", G_TYPE_DOUBLE, &rate, 1.0);
 
   if (!(type = g_type_from_name (type_string))) {
     *error = g_error_new (GES_ERROR, 0, "This type doesn't exist : %s",
@@ -408,7 +411,6 @@ _ges_add_clip_from_struct (GESTimeline * timeline, GstStructure * structure,
 
   if (clip) {
     res = TRUE;
-
     if (GES_IS_TEST_CLIP (clip)) {
       if (pattern) {
         GEnumClass *enum_class =
@@ -440,6 +442,17 @@ _ges_add_clip_from_struct (GESTimeline * timeline, GstStructure * structure,
     *error = g_error_new (GES_ERROR, 0,
         "Couldn't add clip with id %s to layer with priority %d", asset_id,
         layer_priority);
+  }
+
+  if (GES_IS_SOURCE_CLIP (clip)) {
+    if (rate < 0) {
+      res = FALSE;
+      *error =
+          g_error_new (GES_ERROR, 0, "Negative rate is currenlty not allowed");
+      goto beach;
+    } else if (rate != 1.0) {
+      ges_source_clip_set_rate (GES_SOURCE_CLIP (clip), rate);
+    }
   }
 
   if (res) {

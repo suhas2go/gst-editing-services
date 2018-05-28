@@ -58,7 +58,7 @@ typedef struct
 } Property;
 
 // Currently Clip has the most properties.. adapt as needed
-#define MAX_PROPERTIES 8
+#define MAX_PROPERTIES 9
 typedef struct
 {
   const gchar *long_name;
@@ -93,6 +93,10 @@ static GESCommandLineOption options[] = {
       {
         "inpoint", "i", GST_TYPE_CLOCK_TIME, NULL,
         "The inpoint of the clip (time in the input file to start playing from)."
+      },
+      {
+        "rate", "r", G_TYPE_DOUBLE, NULL,
+        "The rate at which to play the clip."
       },
       {
         "track-types", "tt", 0, NULL,
