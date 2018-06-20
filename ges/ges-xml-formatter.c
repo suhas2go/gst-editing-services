@@ -468,6 +468,7 @@ _parse_clip (GMarkupParseContext * context,
   GstStructure *props = NULL;
   GESTrackType track_types;
   GstClockTime start, inpoint = 0, duration, layer_prio;
+  gdouble rate = DEFAULT_CLIP_RATE;
 
   const gchar *strid, *asset_id, *strstart, *strin, *strduration, *strrate,
       *strtrack_types, *strtype, *metadatas = NULL, *properties =
@@ -507,6 +508,12 @@ _parse_clip (GMarkupParseContext * context,
       goto convertion_failed;
   }
 
+  if (strrate) {
+    rate = g_ascii_strtod (strrate, NULL);
+    if (errno)
+      goto convertion_failed;
+  }
+
   start = g_ascii_strtoull (strstart, NULL, 10);
   if (errno)
     goto convertion_failed;
@@ -522,8 +529,8 @@ _parse_clip (GMarkupParseContext * context,
   }
 
   ges_base_xml_formatter_add_clip (GES_BASE_XML_FORMATTER (self),
-      strid, asset_id, type, start, inpoint, duration, layer_prio,
-      track_types, props, metadatas, error);
+      strid, asset_id, type, start, inpoint, duration, rate,
+      layer_prio, track_types, props, metadatas, error);
   if (props)
     gst_structure_free (props);
 
@@ -1184,6 +1191,7 @@ _save_layers (GESXmlFormatter * self, GString * str, GESTimeline * timeline)
       GList *tracks;
       gboolean serialize;
       gchar *extractable_id;
+      gdouble rate = 0.0;
 
       clip = GES_CLIP (tmpclip->data);
 
@@ -1199,15 +1207,18 @@ _save_layers (GESXmlFormatter * self, GString * str, GESTimeline * timeline)
           "supported-formats", "rate", "in-point", "start", "duration",
           "max-duration", "priority", "vtype", "uri", NULL);
       extractable_id = ges_extractable_get_id (GES_EXTRACTABLE (clip));
+      if (GES_IS_SOURCE_CLIP (clip)) {
+        rate = ges_source_clip_get_rate (GES_SOURCE_CLIP (clip));
+      }
       append_escaped (str,
           g_markup_printf_escaped ("        <clip id='%i' asset-id='%s'"
               " type-name='%s' layer-priority='%i' track-types='%i' start='%"
               G_GUINT64_FORMAT "' duration='%" G_GUINT64_FORMAT "' inpoint='%"
-              G_GUINT64_FORMAT "' rate='%d' properties='%s' >\n",
+              G_GUINT64_FORMAT "' rate='%f' properties='%s' >\n",
               priv->nbelements, extractable_id,
               g_type_name (G_OBJECT_TYPE (clip)), priority,
               ges_clip_get_supported_formats (clip), _START (clip),
-              _DURATION (clip), _INPOINT (clip), 0, properties));
+              _DURATION (clip), _INPOINT (clip), rate, properties));
       g_free (extractable_id);
       g_free (properties);
 

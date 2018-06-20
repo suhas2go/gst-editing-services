@@ -73,6 +73,7 @@ typedef struct PendingClip
   GstClockTime inpoint;
   GESAsset *asset;
   GstClockTime duration;
+  gdouble rate;
   GESTrackType track_types;
   GESLayer *layer;
 
@@ -536,7 +537,7 @@ set_property_foreach (GQuark field_id, const GValue * value, GObject * object)
 static inline GESClip *
 _add_object_to_layer (GESBaseXmlFormatterPrivate * priv, const gchar * id,
     GESLayer * layer, GESAsset * asset, GstClockTime start,
-    GstClockTime inpoint, GstClockTime duration,
+    GstClockTime inpoint, GstClockTime duration, gdouble rate,
     GESTrackType track_types, const gchar * metadatas,
     GstStructure * properties)
 {
@@ -548,6 +549,13 @@ _add_object_to_layer (GESBaseXmlFormatterPrivate * priv, const gchar * id,
         ges_asset_get_id (asset));
 
     return NULL;
+  }
+
+  if (GES_IS_SOURCE_CLIP (clip)) {
+    /* Restore input duration to its previous value before setting up rate */
+    ges_source_clip_set_input_duration (GES_SOURCE_CLIP (clip),
+        duration * rate);
+    ges_source_clip_set_rate (GES_SOURCE_CLIP (clip), rate);
   }
 
   if (metadatas)
@@ -757,8 +765,8 @@ new_asset_cb (GESAsset * source, GAsyncResult * res, PendingAsset * passet)
 
     clip =
         _add_object_to_layer (priv, pend->id, pend->layer, asset,
-        pend->start, pend->inpoint, pend->duration, pend->track_types,
-        pend->metadatas, pend->properties);
+        pend->start, pend->inpoint, pend->duration, pend->rate,
+        pend->track_types, pend->metadatas, pend->properties);
 
     if (clip == NULL)
       continue;
@@ -770,7 +778,6 @@ new_asset_cb (GESAsset * source, GAsyncResult * res, PendingAsset * passet)
         g_list_length (pend->effects));
     for (tmpeffect = pend->effects; tmpeffect; tmpeffect = tmpeffect->next) {
       PendingEffects *peffect = (PendingEffects *) tmpeffect->data;
-
       /* We keep a ref as _free_pending_effect unrefs it */
       _add_track_element (self, clip, gst_object_ref (peffect->trackelement),
           peffect->track_id, peffect->children_properties, peffect->properties);
@@ -942,7 +949,7 @@ ges_base_xml_formatter_add_asset (GESBaseXmlFormatter * self,
 void
 ges_base_xml_formatter_add_clip (GESBaseXmlFormatter * self,
     const gchar * id, const char *asset_id, GType type, GstClockTime start,
-    GstClockTime inpoint, GstClockTime duration,
+    GstClockTime inpoint, GstClockTime duration, gdouble rate,
     guint layer_prio, GESTrackType track_types, GstStructure * properties,
     const gchar * metadatas, GError ** error)
 {
@@ -966,7 +973,7 @@ ges_base_xml_formatter_add_clip (GESBaseXmlFormatter * self,
   /* We do not want the properties that are passed to layer-add_asset to be reset */
   if (properties)
     gst_structure_remove_fields (properties, "supported-formats",
-        "inpoint", "start", "duration", NULL);
+        "inpoint", "start", "duration", "rate", NULL);
 
   asset = ges_asset_request (type, asset_id, NULL);
   if (asset == NULL) {
@@ -997,6 +1004,7 @@ ges_base_xml_formatter_add_clip (GESBaseXmlFormatter * self,
     pclip->inpoint = inpoint;
     pclip->start = start;
     pclip->layer = gst_object_ref (entry->layer);
+    pclip->rate = rate;
 
     pclip->properties = properties ? gst_structure_copy (properties) : NULL;
     pclip->metadatas = g_strdup (metadatas);
@@ -1013,7 +1021,8 @@ ges_base_xml_formatter_add_clip (GESBaseXmlFormatter * self,
   }
 
   nclip = _add_object_to_layer (priv, id, entry->layer,
-      asset, start, inpoint, duration, track_types, metadatas, properties);
+      asset, start, inpoint, duration, rate, track_types, metadatas,
+      properties);
 
   if (!nclip)
     return;
