@@ -20,6 +20,7 @@
 #include "test-utils.h"
 #include <ges/ges.h>
 #include <gst/check/gstcheck.h>
+#include <plugins/nle/nleobject.h>
 
 GST_START_TEST (test_title_source_basic)
 {
@@ -199,6 +200,192 @@ GST_START_TEST (test_title_source_in_layer)
 
 GST_END_TEST;
 
+GST_START_TEST (test_title_source_rate)
+{
+  GESClip *clip;
+  GESTrack *track;
+  GESTimeline *timeline;
+  GESLayer *layer;
+  GESTrackElement *trackelement;
+  gdouble rate;
+
+  track = GES_TRACK (ges_video_track_new ());
+  fail_unless (track != NULL);
+  layer = ges_layer_new ();
+  fail_unless (layer != NULL);
+  timeline = ges_timeline_new ();
+  fail_unless (timeline != NULL);
+  fail_unless (ges_timeline_add_layer (timeline, layer));
+  fail_unless (ges_timeline_add_track (timeline, track));
+  ASSERT_OBJECT_REFCOUNT (timeline, "timeline", 1);
+
+  clip = (GESClip *) ges_title_clip_new ();
+  fail_unless (clip != NULL);
+
+  /* Set some properties */
+  g_object_set (clip, "start", (guint64) 42, "duration", (guint64) 50,
+      "in-point", (guint64) 12, NULL);
+
+  assert_equals_uint64 (_START (clip), 42);
+  assert_equals_uint64 (_DURATION (clip), 50);
+  assert_equals_uint64 (_INPOINT (clip), 0);
+
+  ges_layer_add_clip (layer, GES_CLIP (clip));
+  ges_timeline_commit (timeline);
+  assert_equals_int (g_list_length (GES_CONTAINER_CHILDREN (clip)), 1);
+  trackelement = GES_CONTAINER_CHILDREN (clip)->data;
+  fail_unless (trackelement != NULL);
+  fail_unless (GES_TIMELINE_ELEMENT_PARENT (trackelement) ==
+      GES_TIMELINE_ELEMENT (clip));
+  fail_unless (ges_track_element_get_track (trackelement) == track);
+
+  /* Check that trackelement has the same properties */
+  assert_equals_uint64 (_START (trackelement), 42);
+  assert_equals_uint64 (_DURATION (trackelement), 50);
+  assert_equals_uint64 (_INPOINT (trackelement), 0);
+
+  /* Test rate property */
+  g_object_get (clip, "rate", &rate, NULL);
+  assert_equals_float (rate, 1.0);
+
+  g_object_set (clip, "rate", (gdouble) 2.0, NULL);
+  g_object_get (clip, "rate", &rate, NULL);
+  assert_equals_float (rate, 2.0);
+  ges_timeline_commit (timeline);
+
+  assert_equals_uint64 (_START (clip), 42);
+  assert_equals_uint64 (_DURATION (clip), 25);
+  assert_equals_uint64 (_INPOINT (clip), 0);
+
+  assert_equals_uint64 (_START (trackelement), 42);
+  assert_equals_uint64 (_DURATION (trackelement), 25);
+  assert_equals_uint64 (_INPOINT (trackelement), 0);
+
+  g_object_set (clip, "rate", (gdouble) 0.5, NULL);
+  g_object_get (clip, "rate", &rate, NULL);
+  assert_equals_float (rate, 0.5);
+  ges_timeline_commit (timeline);
+
+  assert_equals_uint64 (_START (clip), 42);
+  assert_equals_uint64 (_DURATION (clip), 100);
+  assert_equals_uint64 (_INPOINT (clip), 0);
+
+  assert_equals_uint64 (_START (trackelement), 42);
+  assert_equals_uint64 (_DURATION (trackelement), 100);
+  assert_equals_uint64 (_INPOINT (trackelement), 0);
+
+  ges_container_remove (GES_CONTAINER (clip),
+      GES_TIMELINE_ELEMENT (trackelement));
+
+  gst_object_unref (timeline);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_split_title_source_rate)
+{
+  GESClip *clip, *split_clip;
+  GESTrack *track;
+  GESTimeline *timeline;
+  GESLayer *layer;
+  GESTrackElement *trackelement, *split_trackelement;
+  gdouble rate;
+  GstElement *nle;
+
+  track = GES_TRACK (ges_video_track_new ());
+  fail_unless (track != NULL);
+  layer = ges_layer_new ();
+  fail_unless (layer != NULL);
+  timeline = ges_timeline_new ();
+  fail_unless (timeline != NULL);
+  fail_unless (ges_timeline_add_layer (timeline, layer));
+  fail_unless (ges_timeline_add_track (timeline, track));
+  ASSERT_OBJECT_REFCOUNT (timeline, "timeline", 1);
+
+  clip = (GESClip *) ges_title_clip_new ();
+  fail_unless (clip != NULL);
+
+  /* Set some properties */
+  g_object_set (clip, "start", (guint64) 42, "duration", (guint64) 50,
+      "in-point", (guint64) 12, NULL);
+
+  assert_equals_uint64 (_START (clip), 42);
+  assert_equals_uint64 (_DURATION (clip), 50);
+  assert_equals_uint64 (_INPOINT (clip), 0);
+
+  ges_layer_add_clip (layer, GES_CLIP (clip));
+  ges_timeline_commit (timeline);
+  assert_equals_int (g_list_length (GES_CONTAINER_CHILDREN (clip)), 1);
+  trackelement = GES_CONTAINER_CHILDREN (clip)->data;
+  fail_unless (trackelement != NULL);
+  fail_unless (GES_TIMELINE_ELEMENT_PARENT (trackelement) ==
+      GES_TIMELINE_ELEMENT (clip));
+  fail_unless (ges_track_element_get_track (trackelement) == track);
+
+  /* Check that trackelement has the same properties */
+  assert_equals_uint64 (_START (trackelement), 42);
+  assert_equals_uint64 (_DURATION (trackelement), 50);
+  assert_equals_uint64 (_INPOINT (trackelement), 0);
+
+  nle = ges_track_element_get_nleobject (trackelement);
+  nle_object_check (nle, 42, 50, 0,
+      50, MIN_NLE_PRIO + TRANSITIONS_HEIGHT, TRUE);
+  assert_equals_float (((NleObject *) nle)->media_duration_factor, 1.0);
+
+  /* Test rate property */
+  g_object_get (clip, "rate", &rate, NULL);
+  assert_equals_float (rate, 1.0);
+
+  g_object_set (clip, "rate", (gdouble) 2.0, NULL);
+  g_object_get (clip, "rate", &rate, NULL);
+  assert_equals_float (rate, 2.0);
+  ges_timeline_commit (timeline);
+
+  assert_equals_uint64 (_START (clip), 42);
+  assert_equals_uint64 (_DURATION (clip), 25);
+  assert_equals_uint64 (_INPOINT (clip), 0);
+
+  assert_equals_uint64 (_START (trackelement), 42);
+  assert_equals_uint64 (_DURATION (trackelement), 25);
+  assert_equals_uint64 (_INPOINT (trackelement), 0);
+
+  nle = ges_track_element_get_nleobject (trackelement);
+  nle_object_check (nle, 42, 25, 0,
+      25, MIN_NLE_PRIO + TRANSITIONS_HEIGHT, TRUE);
+  assert_equals_float (((NleObject *) nle)->media_duration_factor, 2.0);
+
+  split_clip = ges_clip_split (clip, 50);
+  fail_unless (GES_IS_CLIP (split_clip));
+  assert_equals_uint64 (_START (split_clip), 50);
+  assert_equals_uint64 (_DURATION (split_clip), 17);
+  assert_equals_uint64 (_INPOINT (split_clip), 0);
+
+  assert_equals_int (g_list_length (GES_CONTAINER_CHILDREN (split_clip)), 1);
+  split_trackelement = GES_CONTAINER_CHILDREN (split_clip)->data;
+  fail_unless (split_trackelement != NULL);
+  fail_unless (GES_TIMELINE_ELEMENT_PARENT (split_trackelement) ==
+      GES_TIMELINE_ELEMENT (split_clip));
+  fail_unless (ges_track_element_get_track (split_trackelement) == track);
+
+  assert_equals_uint64 (_START (split_trackelement), 50);
+  assert_equals_uint64 (_DURATION (split_trackelement), 17);
+  assert_equals_uint64 (_INPOINT (split_trackelement), 0);
+
+  nle = ges_track_element_get_nleobject (split_trackelement);
+  assert_equals_float (((NleObject *) nle)->media_duration_factor, 2.0);
+  nle_object_check (nle, 50, 17, 0,
+      17, MIN_NLE_PRIO + TRANSITIONS_HEIGHT + 1, TRUE);
+
+  ges_container_remove (GES_CONTAINER (clip),
+      GES_TIMELINE_ELEMENT (trackelement));
+  ges_container_remove (GES_CONTAINER (split_clip),
+      GES_TIMELINE_ELEMENT (split_trackelement));
+
+  gst_object_unref (timeline);
+}
+
+GST_END_TEST;
+
 static Suite *
 ges_suite (void)
 {
@@ -216,6 +403,8 @@ ges_suite (void)
   tcase_add_test (tc_chain, test_title_source_basic);
   tcase_add_test (tc_chain, test_title_source_properties);
   tcase_add_test (tc_chain, test_title_source_in_layer);
+  tcase_add_test (tc_chain, test_title_source_rate);
+  tcase_add_test (tc_chain, test_split_title_source_rate);
 
   return s;
 }

@@ -728,6 +728,85 @@ GST_START_TEST (test_load_xges_and_play)
 GST_END_TEST;
 #endif
 
+GST_START_TEST (test_project_rate)
+{
+  GESProject *project;
+  GESTimeline *timeline;
+  GESAsset *formatter_asset;
+  gboolean saved;
+  gchar *uri = ges_test_file_uri ("test-project.xges");
+  GList *clips;
+  GESClip *clip;
+
+  project = ges_project_new (uri);
+  mainloop = g_main_loop_new (NULL, FALSE);
+
+  /* Connect the signals */
+  g_signal_connect (project, "loaded", (GCallback) project_loaded_cb, mainloop);
+  g_signal_connect (project, "missing-uri", (GCallback) _set_new_uri, NULL);
+
+  /* Now extract a timeline from it */
+  GST_LOG ("Loading project");
+  timeline = GES_TIMELINE (ges_asset_extract (GES_ASSET (project), NULL));
+
+  g_main_loop_run (mainloop);
+
+  GST_LOG ("Test first loading");
+
+  g_free (uri);
+
+  clips = ges_layer_get_clips (GES_LAYER (timeline->layers->data));
+  assert_equals_int (g_list_length (clips), 1);
+  clip = clips->data;
+  fail_unless (GES_IS_SOURCE_CLIP (clip));
+  assert_equals_uint64 (_DURATION (clip), GST_SECOND);
+
+  ges_source_clip_set_rate (GES_SOURCE_CLIP (clip), 2.0);
+  assert_equals_float (ges_source_clip_get_rate (GES_SOURCE_CLIP (clip)), 2.0);
+  assert_equals_uint64 (_DURATION (clip), 0.5 * GST_SECOND);
+
+  uri = ges_test_get_tmp_uri ("test-project_RATE_TEMP.xges");
+  formatter_asset = ges_asset_request (GES_TYPE_FORMATTER, "ges", NULL);
+  saved =
+      ges_project_save (project, timeline, uri, formatter_asset, TRUE, NULL);
+  fail_unless (saved);
+
+  g_list_free_full (clips, gst_object_unref);
+  gst_object_unref (timeline);
+  gst_object_unref (project);
+
+  project = ges_project_new (uri);
+
+  ASSERT_OBJECT_REFCOUNT (project, "Our + cache", 2);
+
+  g_signal_connect (project, "loaded", (GCallback) project_loaded_cb, mainloop);
+
+  GST_LOG ("Loading saved project");
+  timeline = GES_TIMELINE (ges_asset_extract (GES_ASSET (project), NULL));
+  fail_unless (GES_IS_TIMELINE (timeline));
+
+  g_main_loop_run (mainloop);
+
+  clips = ges_layer_get_clips (GES_LAYER (timeline->layers->data));
+  assert_equals_int (g_list_length (clips), 1);
+  clip = clips->data;
+  fail_unless (GES_IS_SOURCE_CLIP (clip));
+  assert_equals_float (ges_source_clip_get_rate (GES_SOURCE_CLIP (clip)), 2.0);
+  assert_equals_uint64 (_DURATION (clip), 0.5 * GST_SECOND);
+
+  g_list_free_full (clips, gst_object_unref);
+
+  gst_object_unref (timeline);
+  gst_object_unref (project);
+  g_free (uri);
+
+  g_main_loop_unref (mainloop);
+  g_signal_handlers_disconnect_by_func (project, (GCallback) project_loaded_cb,
+      mainloop);
+}
+
+GST_END_TEST;
+
 static Suite *
 ges_suite (void)
 {
@@ -748,6 +827,7 @@ ges_suite (void)
   tcase_add_test (tc_chain, test_project_auto_transition);
   /*tcase_add_test (tc_chain, test_load_xges_and_play); */
   tcase_add_test (tc_chain, test_project_unexistant_effect);
+  tcase_add_test (tc_chain, test_project_rate);
 
   return s;
 }
